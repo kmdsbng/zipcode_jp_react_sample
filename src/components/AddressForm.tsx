@@ -1,9 +1,9 @@
 import * as React from "react";
 import {ChangeEvent} from "react";
-import {PrefectureJson, ZipCodeJpInterface} from "../ZipCodeJpInterface";
+import {CityJson, PrefectureJson, TownJson, ZipCodeJpInterface, ZipCodeJson} from "../ZipCodeJpInterface";
 import {ZipCodeVo} from "../address/ZipCodeVo";
 import {BLANK_PREFECTURE, PrefectureVo} from "../address/PrefectureVo";
-import {CityVo} from "../address/CityVo";
+import {BLANK_CITY, CityVo} from "../address/CityVo";
 import {TownVo} from "../address/TownVo";
 
 declare var ZipCodeJp: ZipCodeJpInterface;
@@ -27,20 +27,22 @@ export interface AddressFormState {
     town: TownVo;
     prefectures: PrefectureVo[];
     prefectureMap: Map<string, PrefectureVo>;
+    cities: CityVo[];
+    cityMap: Map<string, CityVo>;
+    towns: TownVo[];
+    townNameZipCodeMap: Map<string, ZipCodeVo>;
 }
 
 export class AddressForm extends React.Component<AddressFormProps, AddressFormState> {
     constructor(props: AddressFormProps) {
         super(props);
 
-        const prefectures: PrefectureVo[] = [
-            {prefectureJisCode: "01", prefectureName: "北海道"},
-            {prefectureJisCode: "02", prefectureName: "青森県"}
-        ];
+        const prefectures: PrefectureVo[] = [];
         const prefectureMap = new Map<string, PrefectureVo>();
-        prefectures.forEach((pref) => {
-            prefectureMap.set(pref.prefectureJisCode, pref);
-        });
+        const cities: CityVo[] = [];
+        const cityMap = new Map<string, CityVo>();
+        const towns: TownVo[] = [];
+        const townNameZipCodeMap = new Map<string, ZipCodeVo>();
 
         this.state = {
             zipCode: props.zipCode,
@@ -48,12 +50,18 @@ export class AddressForm extends React.Component<AddressFormProps, AddressFormSt
             city: props.city,
             town: props.town,
             prefectures: prefectures,
-            prefectureMap: prefectureMap
+            prefectureMap: prefectureMap,
+            cities: cities,
+            cityMap: cityMap,
+            towns: towns,
+            townNameZipCodeMap: townNameZipCodeMap
         };
     }
 
     componentDidMount() {
         this.loadPrefectureAndUpdateState();
+        this.loadCitiesAndUpdateState(this.state.prefecture);
+        this.loadTownsAndUpdateState(this.state.city);
     }
 
     private loadPrefectureAndUpdateState = () => {
@@ -74,6 +82,58 @@ export class AddressForm extends React.Component<AddressFormProps, AddressFormSt
         })
     };
 
+    private loadCitiesAndUpdateState = (prefecture: PrefectureVo) => {
+        const prefectureJisCode = prefecture.prefectureJisCode;
+        if (prefectureJisCode == "") {
+            this.setCitiesState([]);
+            return;
+        }
+
+        ZipCodeJp.getCitiesOfPrefecture(prefectureJisCode, (err: any, cityJsons: CityJson[]) => {
+            if (err != null) {
+                console.log(err);
+                return;
+            }
+
+            const cities: CityVo[] = cityJsons.map((cityJson: CityJson) => {
+                return {
+                    cityJisCode: cityJson.city_jis_code,
+                    cityName: cityJson.city_name
+                }
+            });
+
+            this.setCitiesState(cities);
+        })
+    };
+
+    private loadTownsAndUpdateState = (city: CityVo) => {
+        const cityJisCode = city.cityJisCode;
+        if (cityJisCode == "") {
+            this.setTownsState([], new Map<string, ZipCodeVo>());
+            return;
+        }
+
+        ZipCodeJp.getTownsOfCity(cityJisCode, (err: any, townJsons: TownJson[]) => {
+            if (err != null) {
+                console.log(err);
+                return;
+            }
+
+            const towns: TownVo[] = townJsons.map((townJson: TownJson) => {
+                return {
+                    townName: townJson.town_name
+                }
+            });
+            const townNameZipCodeMap = new Map<string, ZipCodeVo>();
+            townJsons.forEach((townJson: TownJson) => {
+                townNameZipCodeMap.set(townJson.town_name, {zipCodeStr: townJson.zip_code});
+            })
+
+            this.setTownsState(towns, townNameZipCodeMap);
+        })
+
+    };
+
     private setPrefecturesState(prefectures: PrefectureVo[]) {
         const prefectureMap = new Map<string, PrefectureVo>();
         prefectures.forEach((pref) => {
@@ -86,18 +146,96 @@ export class AddressForm extends React.Component<AddressFormProps, AddressFormSt
         });
     }
 
+    private setCitiesState(cities: CityVo[]) {
+        const cityMap = new Map<string, CityVo>();
+        cities.forEach((city) => {
+            cityMap.set(city.cityJisCode, city);
+        });
+
+        this.setState({
+            cities: cities,
+            cityMap: cityMap
+        });
+    }
+
+    private setTownsState(towns: TownVo[], townNameZipCodeMap: Map<string, ZipCodeVo>) {
+        this.setState({
+            towns: towns,
+            townNameZipCodeMap: townNameZipCodeMap
+        });
+    }
+
     _onSearchZipCode = () => {
-        console.log('search')
+        const zipCode = this.state.zipCode;
+
+        ZipCodeJp.getAddressesOfZipCode(zipCode.zipCodeStr, (err: any, zipCodeJsons: ZipCodeJson[]) => {
+            if (err != null) {
+                console.log(err);
+                return;
+            }
+
+            if (zipCodeJsons.length == 0) {
+                return;
+            }
+
+            const zipCodeJson: ZipCodeJson = zipCodeJsons[0];
+            const prevPrefectureJisCode = this.state.prefecture.prefectureJisCode;
+            const prevCityJisCode = this.state.city.cityJisCode;
+            const prefecture: PrefectureVo = {
+                prefectureJisCode: zipCodeJson.prefecture_jis_code,
+                prefectureName: zipCodeJson.prefecture_name
+            };
+            const city: CityVo = {
+                cityJisCode: zipCodeJson.city_jis_code,
+                cityName: zipCodeJson.city_name
+            };
+            const town: TownVo = {
+                townName: zipCodeJson.town_name
+            };
+
+            this.setState(
+                {
+                    prefecture: prefecture,
+                    city: city,
+                    town: town
+                }
+            );
+
+            if (prevPrefectureJisCode != prefecture.prefectureJisCode) {
+                this.loadCitiesAndUpdateState(prefecture);
+            }
+            if (prevCityJisCode != city.cityJisCode) {
+                this.loadTownsAndUpdateState(city);
+            }
+        })
+    };
+
+    _onChangeZipCode = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        let zipCodeStr = event.target.value;
+        this.setState({zipCode: {zipCodeStr: zipCodeStr}});
     };
 
     _onChangePrefecture = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        console.log(event.target.value);
-        const prefecture = this.state.prefectureMap.get(event.target.value);
+        let prefecture = this.state.prefectureMap.get(event.target.value);
         if (prefecture == null) {
-            this.setState({prefecture: BLANK_PREFECTURE})
-        } else {
-            this.setState({prefecture: prefecture})
+            prefecture = BLANK_PREFECTURE;
         }
+        this.setState({prefecture: prefecture});
+        this.loadCitiesAndUpdateState(prefecture);
+    };
+
+    _onChangeCity = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const city = this.state.cityMap.get(event.target.value);
+        if (city == null) {
+            this.setState({city: BLANK_CITY});
+        } else {
+            this.setState({city: city});
+        }
+    };
+
+    _onChangeTown = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const townName = event.target.value;
+        this.setState({town: {townName: townName}});
     };
 
     render() {
@@ -105,13 +243,17 @@ export class AddressForm extends React.Component<AddressFormProps, AddressFormSt
             return <option value={prefectureVo.prefectureJisCode} key={prefectureVo.prefectureJisCode}>{prefectureVo.prefectureName}</option>
         });
 
+        const cityOptions = this.state.cities.map((cityVo) => {
+            return <option value={cityVo.cityJisCode} key={cityVo.cityJisCode}>{cityVo.cityName}</option>
+        });
+
         return (
             <React.Fragment>
                 <div>
-                    <h1>Address Form</h1>
+                    <h1>住所Form</h1>
                     <p>
                         郵便番号:
-                        <input type="text" value={this.state.zipCode.zipCodeStr} />
+                        <input type="text" value={this.state.zipCode.zipCodeStr} onChange={this._onChangeZipCode} />
                         <button onClick={this._onSearchZipCode}>郵便番号から検索</button>
                     </p>
                     <p>
@@ -122,15 +264,20 @@ export class AddressForm extends React.Component<AddressFormProps, AddressFormSt
                             </select>
                     </p>
                     <p>
-                        市区郡: {this.state.city.cityJisCode} {this.state.city.cityName}
+                        市区郡:
+                            <select value={this.state.city.cityJisCode} onChange={this._onChangeCity}>
+                                <option value={""} key={"blank"}>----</option>
+                                {cityOptions}
+                            </select>
                     </p>
                     <p>
-                        町村: {this.state.town.townName}
+                        町村:
+                        <input type="text" value={this.state.town.townName} onChange={this._onChangeTown} />
                     </p>
                 </div>
 
                 <div>
-                    <h1>Address Form</h1>
+                    <h1>保存された住所情報</h1>
                     <p>
                         郵便番号: {this.state.zipCode.zipCodeStr}
                     </p>
