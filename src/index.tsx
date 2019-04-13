@@ -26,6 +26,9 @@ const _onChangeAddress = (newAddress: Partial<AddressVo>) => {
 const renderApp = () => {
     ReactDOM.render(
         <React.Fragment>
+            <p>
+                <a href="https://github.com/kmdsbng/zipcode_jp_react_sample" target="_blank">Go to GitHub repository.</a>
+            </p>
             <AddressForm
                 key={1}
                 address={repo.address}
