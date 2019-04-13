@@ -1,11 +1,18 @@
-import {PrefectureVo} from "./PrefectureVo";
-import {CityVo} from "./CityVo";
-import {TownVo} from "./TownVo";
-import {ZipCodeVo} from "./ZipCodeVo";
+import {BLANK_PREFECTURE, PrefectureVo} from "./PrefectureVo";
+import {BLANK_CITY, CityVo} from "./CityVo";
+import {BLANK_TOWN, TownVo} from "./TownVo";
+import {BLANK_ZIP_CODE, ZipCodeVo} from "./ZipCodeVo";
 
-interface AddressVo {
+export interface AddressVo {
     zipCode: ZipCodeVo;
     prefecture: PrefectureVo;
     city: CityVo;
     town: TownVo;
 }
+
+export const BLANK_ADDRESS = {
+    zipCode: BLANK_ZIP_CODE,
+    prefecture: BLANK_PREFECTURE,
+    city: BLANK_CITY,
+    town: BLANK_TOWN
+};
